@@ -20,14 +20,17 @@ A quick lpd for just tossing postscript files. Work in progress.
 
 
 FILE_DOWNLOAD_TIMEOUT = 20
+LISTEN_IP_ADDRESS = "0.0.0.0"
+LISTEN_PORT = 515
 
 
 def hexdump(s):
     return "".join("%02x " % ord(ch) for ch in s)
 
 
-POST_CONVERT_SCRIPT_PATH = r"C:\Program Files (x86)\gs\gs9.15\bin"
-POST_CONVERT_SCRIPT = r"C:\Program Files (x86)\gs\gs9.15\lib\ps2pdf.bat"
+# TODO make the post-upload convert run configurable
+POST_UPLOAD_CONVERT_SCRIPT_PATH = r"C:\Program Files (x86)\gs\gs9.15\bin"
+POST_UPLOAD_CONVERT_SCRIPT = r"C:\Program Files (x86)\gs\gs9.15\lib\ps2pdf.bat"
 
 
 script_path = os.path.dirname(os.path.abspath(__file__))
@@ -165,7 +168,8 @@ class Connection(object):
         return True
 
     def describe_queues_short(self, queue_name, user_names_or_job_numbers_list_str):
-        # Nothing yet
+        # TODO implement describe queue short response
+        print "describe queues: not implemented"
         return False
 
     def run_job_subcommand(self, command):
@@ -186,6 +190,7 @@ class Connection(object):
 
             self.bytes_left = count
 
+            # TODO make detailed output configurable
             print "Queue %s receiving %s file %s (%d bytes)" % (self.current_queue_name,
                                                                 "data" if is_data_file else "control",
                                                                 self.current_job_name, self.bytes_left)
@@ -204,8 +209,10 @@ class Connection(object):
 
         job_real_name = [line[1:] for line in control_lines if line.startswith("N")][0]
 
+        # TODO apply magic to file contents to choose a final extension; maybe choose post-download step based on it
         ext = ".ps"
 
+        # TODO better escaping of job name parts going into filenames
         job_real_name = job_real_name.replace("/", "_")
         job_real_name = job_real_name.replace("\\", "_")
         job_real_name = job_real_name.replace(":", "_")
@@ -246,8 +253,10 @@ class Connection(object):
         # noinspection PyBroadException
         try:
             env = dict(os.environ)
-            env["PATH"] = POST_CONVERT_SCRIPT_PATH + ";" + env.get("PATH", "")
-            subprocess.check_call([POST_CONVERT_SCRIPT, output_filename], env=env)
+            env["PATH"] = POST_UPLOAD_CONVERT_SCRIPT_PATH + ";" + env.get("PATH", "")
+            # TODO instead of blocking for the convert spin it off so we can continue to process other client requests
+            # nice to have: worker pool
+            subprocess.check_call([POST_UPLOAD_CONVERT_SCRIPT, output_filename], env=env)
         except Exception:
             traceback.print_exc()
         print "Post-processing complete"
@@ -268,11 +277,9 @@ class Connection(object):
 def main():
     listening_socket = socket.socket()
     listening_socket.setsockopt(socket.SOL_SOCKET, socket.SO_OOBINLINE, 1)
-    ip_address = "0.0.0.0"
-    port = 515
-    listening_socket.bind((ip_address, port))
+    listening_socket.bind((LISTEN_IP_ADDRESS, LISTEN_PORT))
     listening_socket.listen(1)
-    print "Listening at %s:%d" % (ip_address, port)
+    print "Listening at %s:%d" % (LISTEN_IP_ADDRESS, LISTEN_PORT)
 
     all_sockets = [listening_socket]
     connections_by_peername = {}
@@ -315,13 +322,9 @@ def main():
 
         for cur_socket in xlist:
             cur_peername = cur_socket.getpeername()
-            print "socket in xlist %r, closing" % (cur_peername,)
+            print "socket in xlist %r" % (cur_peername,)
             connection = connections_by_peername[cur_peername]
             connection.do_read_exceptional()
-            # connection.before_local_close()
-            # cur_socket.close()
-            # del connections_by_peername[cur_peername]
-            # all_sockets.remove(cur_socket)
 
 
 if __name__ == "__main__":
