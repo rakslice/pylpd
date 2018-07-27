@@ -1,4 +1,3 @@
-import bisect
 import os
 import socket
 
@@ -10,6 +9,15 @@ import subprocess
 import traceback
 
 import time
+
+
+"""
+A quick lpd for just tossing postscript files. Work in progress.
+"""
+
+# LPR RFC:
+# https://www.rfc-editor.org/rfc/rfc1179.txt
+
 
 FILE_DOWNLOAD_TIMEOUT = 20
 
